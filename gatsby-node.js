@@ -3,6 +3,7 @@ const path = require('path')
 
 const CockpitService = require('./src/CockpitService')
 const CollectionItemNodeFactory = require('./src/CollectionItemNodeFactory')
+const SingletonItemNodeFactory = require('./src/SingletonItemNodeFactory')
 const {
   MARKDOWN_IMAGE_REGEXP_GLOBAL,
   MARKDOWN_ASSET_REGEXP_GLOBAL,
@@ -19,7 +20,8 @@ exports.sourceNodes = async ({ actions, cache, store }, configOptions) => {
     configOptions.baseUrl,
     configOptions.token,
     configOptions.locales,
-    configOptions.collections
+    configOptions.collections,
+    configOptions.singletons
   )
   const fileNodeFactory = new FileNodeFactory(createNode, store, cache)
   const markdownNodeFactory = new MarkdownNodeFactory(createNode)
@@ -29,11 +31,14 @@ exports.sourceNodes = async ({ actions, cache, store }, configOptions) => {
   await cockpit.validateToken()
 
   const collections = await cockpit.getCollections()
+  const singletons = await cockpit.getSingletons()
+  const nodes = [...collections, ...singletons]
+
   const { images, assets, markdowns, layouts } = cockpit.normalizeResources(
-    collections
+    nodes
   )
 
-  cache.set(TYPE_PREFIX_COCKPIT, collections)
+  cache.set(TYPE_PREFIX_COCKPIT, nodes)
 
   for (let path in images) {
     const imageNode = await fileNodeFactory.createImageNode(path)
@@ -76,6 +81,21 @@ exports.sourceNodes = async ({ actions, cache, store }, configOptions) => {
     )
 
     collection.items.forEach(item => {
+      nodeFactory.create(item)
+    })
+  })
+
+  singletons.forEach(singleton => {
+    const nodeFactory = new SingletonItemNodeFactory(
+      createNode,
+      singleton.name,
+      images,
+      assets,
+      markdowns,
+      layouts
+    )
+
+    singleton.items.forEach(item => {
       nodeFactory.create(item)
     })
   })
